@@ -7,7 +7,7 @@ import os
 from netaddr import *
 from netifaces import interfaces, ifaddresses, AF_INET
 
-listone = []
+
 def get_ip_list(ip_network):
 	ip_list = []
 	for ip in ip_network.iter_hosts():
@@ -35,30 +35,39 @@ def call_arping(ip):
 		except NotRegisteredError:
 			vendor = ""
 
-		sys.stdout.write("| %14s | %17s | %40s | %34s |\n" %(ip, str(mac), vendor, hostname))
+		return ip, str(mac), vendor, hostname
+
+def scan_interface(ifcName):
+	for ipinfo in ifaddresses(ifcName)[AF_INET]:
+		address = ipinfo['addr']
+		netmask = ipinfo['netmask']
+
+		ip = IPNetwork('%s/%s' % (address, netmask))
+
+		pool = multiprocessing.Pool(len(ip))
+		rval = pool.map_async(call_arping, get_ip_list(ip))
+		results = rval.get()
+		pool.close()
+		
+		# Filter out bad entries 
+		results = filter(None, results)
+	
+	return results
+
+def dump_results_stdout(ifcName, results):
+	sys.stdout.write("|------------------------------------------------- Interface %5s --------------------------------------------------|\n" %(ifcName))
+	# Sort by IP Address
+	for entry in sorted(results, key=lambda item: socket.inet_aton(item[0])):
+		sys.stdout.write("| %14s | %17s | %40s | %34s |\n" %(entry[0], entry[1], entry[2], entry[3]))
+
+	sys.stdout.write("|--------------------------------------------------------------------------------------------------------------------|\n")
 
 if not os.geteuid()==0:
-	sys.exit("\nOnly root can run this script")
+	sys.exit("Only root can run this script")
 
 
-for ifaceName in interfaces():
-	if ifaddresses(ifaceName).has_key(AF_INET) and not ifaceName == "lo":
-		for ipinfo in ifaddresses(ifaceName)[AF_INET]:
-			sys.stdout.write("|------------------------------------------------- Interface %5s --------------------------------------------------|\n" %(ifaceName))
-			address = ipinfo['addr']
-			netmask = ipinfo['netmask']
-
-			ip = IPNetwork('%s/%s' % (address, netmask))
-
-			pool = multiprocessing.Pool(len(ip))
-			rval = pool.map_async(call_arping, get_ip_list(ip))
-			rval.get()
-			pool.close()
-			sys.stdout.write("|--------------------------------------------------------------------------------------------------------------------|\n")
-			exit
-
-
+for ifcName in interfaces():
+	if ifaddresses(ifcName).has_key(AF_INET) and not ifcName == "lo":
+		dump_results_stdout(ifcName, scan_interface(ifcName))
 	else:
 		continue
-
-
