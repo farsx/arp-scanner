@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 import multiprocessing
 import subprocess
+import getopt
 import sys
 import socket
 import os
 from netaddr import *
 from netifaces import interfaces, ifaddresses, AF_INET
-
 
 def get_ip_list(ip_network):
 	ip_list = []
@@ -54,20 +54,55 @@ def scan_interface(ifcName):
 	
 	return results
 
-def dump_results_stdout(ifcName, results):
-	sys.stdout.write("|------------------------------------------------- Interface %5s --------------------------------------------------|\n" %(ifcName))
+def dump_results_stdout(ifc, results):
+	sys.stdout.write("|------------------------------------------------- Interface %5s --------------------------------------------------|\n" %(ifc))
+	sys.stdout.write("| %14s | %17s | %40s | %34s |\n" %("IP Address", "MAC Address", "MAC Vendor", "Hostname    "))
+	sys.stdout.write("|--------------------------------------------------------------------------------------------------------------------|\n")
 	# Sort by IP Address
 	for entry in sorted(results, key=lambda item: socket.inet_aton(item[0])):
 		sys.stdout.write("| %14s | %17s | %40s | %34s |\n" %(entry[0], entry[1], entry[2], entry[3]))
 
 	sys.stdout.write("|--------------------------------------------------------------------------------------------------------------------|\n")
 
-if not os.geteuid()==0:
-	sys.exit("Only root can run this script")
+def usage(msg):
+	sys.stderr.write(str(msg))
+	sys.stderr.write("\nUsage:\n\n"
+			"  -i, --interface=<ifc>      Specify an interface to scan\n"
+			"  -h, --help                 Show usage\n")
+
+def main(argv=None):
+	if argv is None:
+		argv = sys.argv
+
+	if not os.geteuid()==0:
+		usage("Only root can run this script");
+		return 1
+
+	# Parse arguments
+	try:
+		opts, args = getopt.getopt(argv[1:], "hi:", ["help", "interface="])
+	except getopt.error, msg:
+		usage(msg)
+		return 2
+
+	for opt, arg in opts:
+		if opt in  ('-i', '--interface'):
+			ifc = arg
+			if ifc not in interfaces():
+				usage("Interface %s not found" %(ifc))
+				return 3
+
+	if ifc:
+		scan_interface(ifc)
+		dump_results_stdout(ifc, scan_interface(ifc))
+	else: 	# Scan every interface if none specified
+		for ifc in interfaces():
+			if ifaddresses(ifc).has_key(AF_INET) and not ifc == "lo":
+				dump_results_stdout(ifc, scan_interface(ifc))
+			else:
+				continue
+
+if __name__ == "__main__":
+	sys.exit(main())
 
 
-for ifcName in interfaces():
-	if ifaddresses(ifcName).has_key(AF_INET) and not ifcName == "lo":
-		dump_results_stdout(ifcName, scan_interface(ifcName))
-	else:
-		continue
