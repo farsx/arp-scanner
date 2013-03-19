@@ -56,7 +56,7 @@ def scan_interface(ifcName):
 
 def dump_results_stdout(ifc, results):
 	sys.stdout.write("|------------------------------------------------- Interface %5s --------------------------------------------------|\n" %(ifc))
-	sys.stdout.write("| %14s | %17s | %40s | %34s |\n" %("IP Address", "MAC Address", "MAC Vendor", "Hostname    "))
+	sys.stdout.write("| %14s | %17s | %40s | %34s |\n" %("IP Address", "MAC Address", "MAC Vendor", "Hostname"))
 	sys.stdout.write("|--------------------------------------------------------------------------------------------------------------------|\n")
 	# Sort by IP Address
 	for entry in sorted(results, key=lambda item: socket.inet_aton(item[0])):
@@ -71,6 +71,7 @@ def usage(msg):
 			"  -h, --help                 Show usage\n")
 
 def main(argv=None):
+	ifc = None
 	if argv is None:
 		argv = sys.argv
 
